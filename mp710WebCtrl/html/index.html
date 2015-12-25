@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <title>Подсветка</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="jquery-ui.min.css">
+  <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  
+  <script src="jquery-1.12.0.min.js"></script>
+  <script src="jquery-ui.min.js"></script>
+  <script src="jquery.ui.touch-punch.min.js"></script>
+
+  <style type="text/css">
+    
+    .button-fix {
+      margin-top: 8px;
+    }
+    
+    #red, #green, #blue {
+      margin: 12px;
+    }
+    
+    body {
+      max-width: 600px;
+      min-width: 240px;
+      font-family: arial;
+      text-align: center;
+      background-color: #eee;
+    }
+    
+    #swatch {
+      margin: 4px;
+      background-image: none;
+      border-color: black;
+      border-width: 1px;
+    }
+    
+    .left-column {
+      float: left;
+      width: 64px;
+    }
+    
+    .right-column {
+      float: right;
+      width: 64px;
+    }
+    
+    .slider-column {
+      margin-left: 72px;
+      margin-right: 72px;
+      overflow: hidden;
+    }
+    
+    #red .ui-slider-range { background: #ef2929; }
+    #red .ui-slider-handle { border-color: #ef2929; }
+    #green .ui-slider-range { background: #8ae234; }
+    #green .ui-slider-handle { border-color: #8ae234; }
+    #blue .ui-slider-range { background: #729fcf; }
+    #blue .ui-slider-handle { border-color: #729fcf; }
+    
+  </style>
+
+  <script language="javascript" type="text/javascript">
+
+  if (!window.console) { 
+    window.console = { log: function() {} } 
+  };
+
+  var RED_CHANNEL_IDX = 14;
+  var GREEN_CHANNEL_IDX = 13;
+  var BLUE_CHANNEL_IDX = 12;
+  
+  var MAX_COLOR_VALUE = 255;
+  var MAX_BRIGHTNESS_VALUE = 128;
+  var SLIDER_SLOP = 4;
+  var SLIDER_RATE = (MAX_COLOR_VALUE - 2 * SLIDER_SLOP) / MAX_BRIGHTNESS_VALUE;
+  
+  var BRIGHNESS_COMMAND_TYPE = "0";
+
+  function brightnessToColor(brightnessR, brightnessG, brightnessB) {
+    var colorComponents = [Math.min(brightnessR * 2, 255).toString(16), 
+                           Math.min(brightnessG * 2, 255).toString(16),
+                           Math.min(brightnessB * 2, 255).toString(16)];
+
+    $.each(colorComponents, function(idx, val) {
+      if (val.length === 1) {
+        colorComponents[idx] = "0" + val;
+      }
+    });
+
+    return colorComponents.join("").toUpperCase();
+  }
+   
+  function sliderToBrightness(sliderValue) {
+    if (sliderValue < SLIDER_SLOP) {
+      return 0;
+    }
+    
+    if (sliderValue > MAX_COLOR_VALUE - SLIDER_SLOP) {
+      return MAX_BRIGHTNESS_VALUE;
+    }
+    
+    return Math.round((sliderValue - SLIDER_SLOP) / SLIDER_RATE);
+  }
+  
+  function brightnessToSlider(brightness) {
+    if (brightness == 0) {
+      return SLIDER_SLOP / 2;
+    }
+    
+    if (brightness == MAX_BRIGHTNESS_VALUE) {
+      return MAX_COLOR_VALUE - SLIDER_SLOP / 2;
+    }
+  
+    return brightness * SLIDER_RATE + SLIDER_SLOP;
+  }
+   
+  function refreshSwatch() {
+    var r = $("#red").slider("value");
+    var g = $("#green").slider("value");
+    var b = $("#blue").slider("value");
+    
+    var color = "#" + brightnessToColor(sliderToBrightness(r), sliderToBrightness(g), sliderToBrightness(b));
+
+    $("#swatch").css("background-color", color);
+  }
+    
+  window.onload = function() {
+
+    var channelsToWidgets = {};
+    channelsToWidgets[RED_CHANNEL_IDX] = $("#red");
+    channelsToWidgets[GREEN_CHANNEL_IDX] = $("#green");
+    channelsToWidgets[BLUE_CHANNEL_IDX] = $("#blue");
+    
+    var isInitialized = false;
+
+    function sendCommand(commandType, channelIdx, param) {
+      if (ws.readyState != 1) {
+        console.log("Command is ignored because websocket is not ready.");
+        return;
+      }
+      
+      ws.send(["{" + commandType, channelIdx, param + "}"].join());
+    }
+    
+    function updateChannel(channelIdx) {
+      refreshSwatch();
+
+      var brightness = sliderToBrightness(channelsToWidgets[channelIdx].slider("value"));
+      
+      sendCommand(BRIGHNESS_COMMAND_TYPE, channelIdx, brightness);
+    }
+    
+    // Initialize except event handlers
+    for (var property in channelsToWidgets) {
+      if (channelsToWidgets.hasOwnProperty(property)) {
+      
+        var channelIdx = property;
+
+        channelsToWidgets[channelIdx].slider({
+            orientation: "horizontal",
+            range: "min",
+            max: MAX_COLOR_VALUE,
+            value: 0,
+            isSlidingInProgress: false,
+            lastStopTime: 0,
+            slide: function() { return false; },
+            change: function() { },
+            start: function(event, ui) { 
+              $(event.target).slider("option", "isSlidingInProgress", true);
+            },
+            stop: function(event, ui) { 
+              $(event.target).slider("option", "isSlidingInProgress", false);
+              $(event.target).slider("option", "lastStopTime", new Date().getTime());
+            }
+        });
+      }
+    }
+    
+    var ws = new WebSocket('ws://' + location.host + '/ws');
+
+    ws.onopen = function(ev) {
+      document.getElementById('redOn').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, RED_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
+      document.getElementById('redOff').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, RED_CHANNEL_IDX, 0); };
+
+      document.getElementById('greenOn').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, GREEN_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
+      document.getElementById('greenOff').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, GREEN_CHANNEL_IDX, 0); };
+      
+      document.getElementById('blueOn').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, BLUE_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
+      document.getElementById('blueOff').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, BLUE_CHANNEL_IDX, 0); };
+    };
+    
+    ws.onerror = function(ev) { 
+      console.log(ev); 
+      $("#errorMsg").show();
+    };
+    
+    ws.onclose = function(ev) { 
+      console.log(ev); 
+      $("#errorMsg").show();
+    };
+    
+    ws.onmessage = function(ev) {
+
+      var deviceState = JSON.parse(ev.data);
+      
+      if (!isInitialized) {
+        isInitialized = true;
+      
+        for (var channelIdx in deviceState) {
+          if (deviceState.hasOwnProperty(channelIdx) && typeof channelsToWidgets[channelIdx] != "undefined") {
+            
+            var sliderValue = brightnessToSlider(deviceState[channelIdx].param);
+            
+            channelsToWidgets[channelIdx].slider("value", sliderValue);
+
+            channelsToWidgets[channelIdx].slider({
+                slide: updateChannel.bind(this, channelIdx),
+                change: refreshSwatch
+            });
+          }
+        }
+
+        refreshSwatch();
+      }
+      else {
+        for (var channelIdx in deviceState) {
+          if (deviceState.hasOwnProperty(channelIdx) && typeof channelsToWidgets[channelIdx] != "undefined") {
+            
+            var currentTime = new Date().getTime();
+            var isSlidingInProgress = $(channelsToWidgets[channelIdx]).slider("option", "isSlidingInProgress");
+            var lastStopTime = $(channelsToWidgets[channelIdx]).slider("option", "lastStopTime");
+            
+            var sliderValue = brightnessToSlider(deviceState[channelIdx].param);
+            
+            if ((currentTime - lastStopTime > 1000) &&
+                (isSlidingInProgress != true) && 
+                (channelsToWidgets[channelIdx].slider("value") != sliderValue)) {
+                
+                channelsToWidgets[channelIdx].slider("value", sliderValue);
+            }
+          }
+        }
+      }
+    };
+  };
+</script>
+
+</head>
+<body>
+  <div role="main" class="ui-content" >
+    <div id="errorMsg" style="display: none;">Возникла ошибка <a href="" >Перезагрузить</a></div>
+    
+    <div id="swatch" class="ui-widget-content ui-corner-all">
+      <h1 style="text-shadow: -1px 0 white, 0 1px white, 1px 0 white, 0 -1px white; margin: auto; letter-spacing: 4px; font-weight: bold;">
+        Подсветка</h1>
+    </div>
+    
+    <div style="margin-top: 5px; margin-bottom: 5px;">
+      <input id="redOff" type="submit" value="Выкл" class="left-column button-fix"></input>
+      <input id="redOn" type="submit" value="Вкл" class="right-column button-fix"></input>
+      <div class="slider-column" > <div id="red" ></div> </div>
+    </div>
+  
+    <div style="margin-top: 5px; margin-bottom: 5px;">
+      <input id="greenOff" type="submit" value="Выкл" class="left-column button-fix"></input>
+      <input id="greenOn" type="submit" value="Вкл" class="right-column button-fix"></input>
+      <div class="slider-column" > <div id="green" ></div> </div>
+    </div>
+  
+    <div style="margin-top: 5px;">
+      <input id="blueOff" type="submit" value="Выкл" class="left-column button-fix"></input>
+      <input id="blueOn" type="submit" value="Вкл" class="right-column button-fix"></input>
+      <div class="slider-column" > <div id="blue" ></div> </div>
+    </div>
+  </div>
+</body>
+</html> 
+
+
+
+
+
+
+

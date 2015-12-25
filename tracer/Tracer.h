@@ -4,7 +4,7 @@
 #                                                                              #
 # Copyright (C) 2015 Oleg Efremov                                              #
 #                                                                              #
-# Uvc_streamer is free software; you can redistribute it and/or modify         #
+# mp710Ctrl is free software; you can redistribute it and/or modify            #
 # it under the terms of the GNU General Public License as published by         #
 # the Free Software Foundation; version 2 of the License.                      #
 #                                                                              #
@@ -19,58 +19,12 @@
 #                                                                              #
 *******************************************************************************/
 
-#include "Tracer.h"
-
-#include <cstdio>
-#include <cstdarg> 
-#include <cstring>
-#include <syslog.h>
-#include <errno.h>
+#ifndef TRACER_H
+#define TRACER_H
 
 namespace Tracer {
-  static const char* TraceName = "UvcStreamer"; 
-  
-  namespace {
-    bool IsStdErrReady() {
-      return fileno(stderr) != -1;
-    }
-    
-    void LogVArgs(const char* format, va_list args) {
-      
-      if (IsStdErrReady()) {
-        std::vfprintf(stderr, format, args);
-      }
-      else {
-        static bool isSysLogInitialized = false;
-        if (!isSysLogInitialized) {
-          ::openlog(Tracer::TraceName, LOG_ODELAY, LOG_USER | LOG_ERR);
-          isSysLogInitialized = true;
-        }
-
-        ::vsyslog(LOG_ERR, format, args);
-      }
-    }
-  }
-
-
-  void Log(const char* format, ...) {
-    va_list args;
-    va_start(args, format);
-    LogVArgs(format, args);
-    va_end(args);
-  }
-  
-  void LogErrNo(const char* format, ...) {
-    va_list args;
-    va_start(args, format);
-    LogVArgs(format, args);
-    va_end(args);
-    
-    char errorMessageBuff[128] = {0};
-    
-    char* errorMessage = strerror_r(errno, errorMessageBuff, sizeof(errorMessageBuff));
-    if (errorMessage != nullptr) {
-      Log("%s\n", errorMessage);
-    }
-  }
+  void Log(const char* format, ...);
+  void LogErrNo(const char* format, ...);
 }
+
+#endif // TRACER_H
