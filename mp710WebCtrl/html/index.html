@@ -5,8 +5,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="jquery-ui.min.css">
-  <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="icon" sizes="192x192" href="images/sunrise.192x192.png">
+  <link rel="manifest" href="manifest.json">
   
   <script src="jquery-1.12.0.min.js"></script>
   <script src="jquery-ui.min.js"></script>
@@ -23,7 +23,7 @@
     }
     
     body {
-      max-width: 600px;
+      max-width: 800px;
       min-width: 240px;
       font-family: arial;
       text-align: center;
@@ -40,25 +40,32 @@
     .left-column {
       float: left;
       width: 64px;
+      margin-right: 8px;
     }
     
     .right-column {
       float: right;
       width: 64px;
+      margin-left: 8px;
+    }
+    
+    .wide-button {
+      width: 128px;
+      height: 20px;
     }
     
     .slider-column {
-      margin-left: 72px;
-      margin-right: 72px;
       overflow: hidden;
     }
     
     #red .ui-slider-range { background: #ef2929; }
-    #red .ui-slider-handle { border-color: #ef2929; }
+    #red .ui-slider-handle { border-color: #ef2929; background: #A00; }
+    
     #green .ui-slider-range { background: #8ae234; }
-    #green .ui-slider-handle { border-color: #8ae234; }
+    #green .ui-slider-handle { border-color: #8ae234; background: #0A0; }
+    
     #blue .ui-slider-range { background: #729fcf; }
-    #blue .ui-slider-handle { border-color: #729fcf; }
+    #blue .ui-slider-handle { border-color: #729fcf; background: #00A; }
     
   </style>
 
@@ -127,7 +134,7 @@
     $("#swatch").css("background-color", color);
   }
     
-  window.onload = function() {
+  function connect() {
 
     var channelsToWidgets = {};
     channelsToWidgets[RED_CHANNEL_IDX] = $("#red");
@@ -143,6 +150,17 @@
       }
       
       ws.send(["{" + commandType, channelIdx, param + "}"].join());
+    }
+    
+    function setBrightness(channelIdx, brightness) {
+      sendCommand(BRIGHNESS_COMMAND_TYPE, channelIdx, brightness);
+    }
+    
+    function adjustBrightness(channelIdx, delta) {
+      var brightness = sliderToBrightness(channelsToWidgets[channelIdx].slider("value")) + delta;
+      if (brightness >= 0 && brightness <= MAX_BRIGHTNESS_VALUE) {
+        setBrightness(channelIdx, brightness);
+      }
     }
     
     function updateChannel(channelIdx) {
@@ -179,17 +197,35 @@
       }
     }
     
-    var ws = new WebSocket('ws://' + location.host + '/ws');
+    window.ws = new WebSocket('ws://' + location.host + '/ws');
 
     ws.onopen = function(ev) {
-      document.getElementById('redOn').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, RED_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
-      document.getElementById('redOff').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, RED_CHANNEL_IDX, 0); };
+      document.getElementById('redOn').onclick = function(ev) { setBrightness(RED_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
+      document.getElementById('redOff').onclick = function(ev) { setBrightness(RED_CHANNEL_IDX, 0); };
+      document.getElementById('redInc').onclick = function(ev) { adjustBrightness(RED_CHANNEL_IDX, 1) };
+      document.getElementById('redDec').onclick = function(ev) { adjustBrightness(RED_CHANNEL_IDX, -1) };
 
-      document.getElementById('greenOn').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, GREEN_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
-      document.getElementById('greenOff').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, GREEN_CHANNEL_IDX, 0); };
+      document.getElementById('greenOn').onclick = function(ev) { setBrightness(GREEN_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
+      document.getElementById('greenOff').onclick = function(ev) { setBrightness(GREEN_CHANNEL_IDX, 0); };
+      document.getElementById('greenInc').onclick = function(ev) { adjustBrightness(GREEN_CHANNEL_IDX, 1) };
+      document.getElementById('greenDec').onclick = function(ev) { adjustBrightness(GREEN_CHANNEL_IDX, -1) };
       
-      document.getElementById('blueOn').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, BLUE_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
-      document.getElementById('blueOff').onclick = function(ev) { sendCommand(BRIGHNESS_COMMAND_TYPE, BLUE_CHANNEL_IDX, 0); };
+      document.getElementById('blueOn').onclick = function(ev) { setBrightness(BLUE_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
+      document.getElementById('blueOff').onclick = function(ev) { setBrightness(BLUE_CHANNEL_IDX, 0); };
+      document.getElementById('blueInc').onclick = function(ev) { adjustBrightness(BLUE_CHANNEL_IDX, 1) };
+      document.getElementById('blueDec').onclick = function(ev) { adjustBrightness(BLUE_CHANNEL_IDX, -1) };
+      
+      document.getElementById('allOn').onclick = function(ev) { 
+        setBrightness(RED_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); 
+        setBrightness(GREEN_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); 
+        setBrightness(BLUE_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); 
+      };
+      
+      document.getElementById('allOff').onclick = function(ev) { 
+        setBrightness(RED_CHANNEL_IDX, 0); 
+        setBrightness(GREEN_CHANNEL_IDX, 0); 
+        setBrightness(BLUE_CHANNEL_IDX, 0); 
+      };
     };
     
     ws.onerror = function(ev) { 
@@ -246,6 +282,8 @@
       }
     };
   };
+  
+  window.onload = connect;
 </script>
 
 </head>
@@ -260,21 +298,33 @@
     
     <div style="margin-top: 5px; margin-bottom: 5px;">
       <input id="redOff" type="submit" value="Выкл" class="left-column button-fix"></input>
+      <input id="redDec" type="submit" value="-" class="left-column button-fix"></input>
       <input id="redOn" type="submit" value="Вкл" class="right-column button-fix"></input>
+      <input id="redInc" type="submit" value="+" class="right-column button-fix"></input>
       <div class="slider-column" > <div id="red" ></div> </div>
     </div>
   
     <div style="margin-top: 5px; margin-bottom: 5px;">
       <input id="greenOff" type="submit" value="Выкл" class="left-column button-fix"></input>
+      <input id="greenDec" type="submit" value="-" class="left-column button-fix"></input>
       <input id="greenOn" type="submit" value="Вкл" class="right-column button-fix"></input>
+      <input id="greenInc" type="submit" value="+" class="right-column button-fix"></input>
       <div class="slider-column" > <div id="green" ></div> </div>
     </div>
   
     <div style="margin-top: 5px;">
       <input id="blueOff" type="submit" value="Выкл" class="left-column button-fix"></input>
+      <input id="blueDec" type="submit" value="-" class="left-column button-fix"></input>
       <input id="blueOn" type="submit" value="Вкл" class="right-column button-fix"></input>
+      <input id="blueInc" type="submit" value="+" class="right-column button-fix"></input>
       <div class="slider-column" > <div id="blue" ></div> </div>
     </div>
+
+    <div style="margin-top: 5px; margin-bottom: 5px;">
+      <input id="allOff" type="submit" value="Общий Выкл" class="left-column button-fix wide-button"></input>
+      <input id="allOn" type="submit" value="Общий Вкл" class="left-column button-fix wide-button"></input>
+    </div>
+    
   </div>
 </body>
 </html> 
