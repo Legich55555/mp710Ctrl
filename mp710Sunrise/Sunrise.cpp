@@ -82,23 +82,23 @@ namespace {
     const unsigned char BLUE_CHANNEL_IDX = 12;
     const std::array<unsigned char, 3> CHANNELS {RED_CHANNEL_IDX, GREEN_CHANNEL_IDX, BLUE_CHANNEL_IDX};
 
-    void LinearEasing(DeviceController& controller,
-                          const unsigned char channelIdx,
-                          const unsigned char startBrightness,
-                          const unsigned char stopBrightness,
-                          const std::chrono::milliseconds& step) {
+//    void LinearEasing(DeviceController& controller,
+//                          const unsigned char channelIdx,
+//                          const unsigned char startBrightness,
+//                          const unsigned char stopBrightness,
+//                          const std::chrono::milliseconds& step) {
 
-        auto stepTime = std::chrono::steady_clock::now();
-        for (unsigned char brightness = startBrightness;
-             brightness <= stopBrightness && !IsSignalRaised();
-             ++brightness, stepTime += step) {
+//        auto stepTime = std::chrono::steady_clock::now();
+//        for (unsigned char brightness = startBrightness;
+//             brightness <= stopBrightness && !IsSignalRaised();
+//             ++brightness, stepTime += step) {
 
-            controller.AddCommand(DeviceController::SET_BRIGHTNESS, channelIdx, brightness);
-            std::this_thread::sleep_until(stepTime);
-        }
+//            controller.AddCommand(DeviceController::SET_BRIGHTNESS, channelIdx, brightness);
+//            std::this_thread::sleep_until(stepTime);
+//        }
 
-        Tracer::Log("Sun %u is up.\n", channelIdx);
-    }
+//        Tracer::Log("Sun %u is up.\n", channelIdx);
+//    }
 
     void Sunset() {
         DeviceController deviceController(MAX_QUEUE_SIZE, OnDeviceUpdate);
@@ -118,14 +118,14 @@ namespace {
     void Sunrise(const std::chrono::seconds& duration) {
         DeviceController deviceController(MAX_QUEUE_SIZE, OnDeviceUpdate);
 
-        const std::chrono::milliseconds durationMs(duration);
-        const std::chrono::milliseconds stepDuration = durationMs / DeviceController::BRIGHTNESS_MAX / CHANNELS.size();
+//        const std::chrono::milliseconds durationMs(duration);
+//        const std::chrono::milliseconds stepDuration = durationMs / DeviceController::BRIGHTNESS_MAX / CHANNELS.size();
 
-        for (auto channel : CHANNELS) {
-            LinearEasing(deviceController, channel, 0, DeviceController::BRIGHTNESS_MAX, stepDuration);
-        }
+//        for (auto channel : CHANNELS) {
+//            LinearEasing(deviceController, channel, 0, DeviceController::BRIGHTNESS_MAX, stepDuration);
+//        }
 
-        Tracer::Log("The Sun is up.\n");
+//        Tracer::Log("The Sun is up.\n");
 
     }
 }
