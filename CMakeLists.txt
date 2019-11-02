@@ -11,7 +11,7 @@ string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type_lower)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_C99 -std=c++11 -static-libstdc++ -Wall -fno-exceptions -fno-rtti")
 if (build_type_lower STREQUAL "release" OR build_type_lower STREQUAL "minsizerel")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Os -flto")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Os -ffunction-sections -fdata-sections -Wl,--gc-sections")
 #    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_CXX_FLAGS} -Wl,--gc-sections")
     message(STATUS "Release optimizations are enabled")
 else()
