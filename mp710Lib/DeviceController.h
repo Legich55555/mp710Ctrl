@@ -33,22 +33,22 @@
 class DeviceController {
 public:
     
-    static const unsigned CHANNELS_NUMBER;
-    static const unsigned BRIGHTNESS_MAX;
+    static const unsigned char CHANNELS_NUMBER;
+    static const unsigned char BRIGHTNESS_MAX;
     
     enum CommandTypesEnum {SET_BRIGHTNESS = 0, NOT_SET = 0xFFFF};
     
     struct Command
     {
         CommandTypesEnum Type;
-        unsigned ChannelIdx;
-        unsigned Param;
+        unsigned char ChannelIdx;
+        unsigned char Param;
         
         Command() 
             : Type(NOT_SET), ChannelIdx(CHANNELS_NUMBER), Param(0)
         { }
 
-        Command(CommandTypesEnum type, unsigned channelIdx, unsigned param) 
+        Command(CommandTypesEnum type, unsigned char channelIdx, unsigned char param)
             : Type(type), ChannelIdx(channelIdx), Param(param)
         { }
     };    
@@ -58,11 +58,10 @@ public:
     DeviceController(size_t maxCommandQueueSize, DoneCallback doneCallback);
     ~DeviceController();
     
-    void AddCommand(CommandTypesEnum type, unsigned channelIdx, unsigned param);
+    void AddCommand(CommandTypesEnum type, unsigned char channelIdx, unsigned char param);
     void AddCommand(const Command& command);
     bool WaitForCommands(std::chrono::milliseconds timeout);
     void Reset();
-    std::tuple<CommandTypesEnum, unsigned> GetLastCommand(unsigned channelIdx) const;
     std::vector<Command> GetLastCommands() const;
     
     DeviceController(const DeviceController&) = delete;
@@ -80,7 +79,6 @@ private:
 
     std::thread _workerThread;
     mutable std::mutex _queueMutex;
-    mutable std::mutex _isQueueEmptyMutex;
     mutable std::condition_variable _isQueueEmptyCondition;
     
     DoneCallback _doneCallback;    

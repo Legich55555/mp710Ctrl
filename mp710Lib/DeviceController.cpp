@@ -144,8 +144,8 @@ private:
 //   return EXIT_SUCCESS;
 // }
 
-const unsigned DeviceController::CHANNELS_NUMBER = 16;
-const unsigned DeviceController::BRIGHTNESS_MAX = 128;
+const unsigned char DeviceController::CHANNELS_NUMBER = 16;
+const unsigned char DeviceController::BRIGHTNESS_MAX = 128;
 
 DeviceController::DeviceController(size_t maxCommandQueueSize, DoneCallback doneCallback)
     : _maxQueueSize(maxCommandQueueSize),
@@ -153,7 +153,7 @@ DeviceController::DeviceController(size_t maxCommandQueueSize, DoneCallback done
     _lastCommands(CHANNELS_NUMBER),
     _doneCallback(doneCallback)
 {
-    for (size_t i = 0; i < _lastCommands.size(); ++i) {
+    for (unsigned char i = 0; i < _lastCommands.size(); ++i) {
         _lastCommands[i].ChannelIdx = i;
     }
     
@@ -166,7 +166,7 @@ DeviceController::~DeviceController() {
     _workerThread.join();
 }
 
-void DeviceController::AddCommand(CommandTypesEnum type, unsigned channelIdx, unsigned param) {
+void DeviceController::AddCommand(CommandTypesEnum type, unsigned char channelIdx, unsigned char param) {
     AddCommand(Command (type, channelIdx, param));
 }
 
@@ -196,30 +196,18 @@ bool DeviceController::WaitForCommands(std::chrono::milliseconds timeout) {
     }
       
     {
-      std::unique_lock<std::mutex> lock(_isQueueEmptyMutex);
+      std::unique_lock<std::mutex> lock(_queueMutex);
       if (_isQueueEmptyCondition.wait_for(lock, timeout) == std::cv_status::timeout)
       {
-          return false;
+          return _commandsQueue.empty();
       }
     }
       
-    {
-      std::unique_lock<std::mutex> queueLock(_queueMutex);
-      if (_commandsQueue.empty())
-      {
-          return true;
-      }
-    }
-
     // It is a spurious wakeup
   }
 }
 
 void DeviceController::Reset() {
-}
-
-std::tuple<DeviceController::CommandTypesEnum, unsigned> DeviceController::GetLastCommand(unsigned int channelIdx) const {
-   return std::tuple<DeviceController::CommandTypesEnum, unsigned>(DeviceController::NOT_SET, 0); 
 }
 
 std::vector<DeviceController::Command> DeviceController::GetLastCommands() const {
@@ -306,11 +294,8 @@ void DeviceController::WorkerThreadFunc() {
                   _commandsQueue.remove_if(isSameChannelIdx);
                 }
             }
-            else {
-              _isQueueEmptyCondition.notify_one();
-            }
         }
-        
+
         if (cmd.Type != NOT_SET) {
             ExecCommand(cmd);
             
@@ -319,6 +304,7 @@ void DeviceController::WorkerThreadFunc() {
             }
         }
         else {
+            _isQueueEmptyCondition.notify_one();
             std::this_thread::sleep_for(std::chrono::milliseconds(15));
         }
   }

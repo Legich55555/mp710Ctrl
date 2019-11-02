@@ -34,87 +34,98 @@ namespace {
     bool IsSignalRaised(void);
     void OnDeviceUpdate(bool result, DeviceController::CommandTypesEnum type, unsigned channelIdx, unsigned param);
     
-    void SwitchOff();
-    void Sunrise(std::chrono::seconds duration);
+    void Sunset();
+    void Sunrise(const std::chrono::seconds& duration);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **/*argv*/) {
 
-  signal(SIGTERM, SignalsHandler);
-  signal(SIGINT, SignalsHandler);
-  
-  if (1 == argc) {
-    const std::chrono::seconds SUNRISE_DURATION(60 * 30);
-    
-    Sunrise(SUNRISE_DURATION);
-  }
-  else {
-    SwitchOff();
-  }
-  
-  return 0;
+    signal(SIGTERM, SignalsHandler);
+    signal(SIGINT, SignalsHandler);
+
+    if (1 == argc) {
+        static const std::chrono::seconds SUNRISE_DURATION(60 * 30);
+
+        Sunrise(SUNRISE_DURATION);
+    }
+    else {
+        Sunset();
+    }
+
+    return 0;
 }
 
 namespace {
     
-  std::atomic<bool> NeedToStopPolling(false);
-  
-  void SignalsHandler(int signal) {
-      Tracer::Log("Interrupted by signal %i.\n", signal);
-      NeedToStopPolling = true;
-  }
-  
-  bool IsSignalRaised(void) {
-      return NeedToStopPolling;
-  }
-  
-  void OnDeviceUpdate(bool result, DeviceController::CommandTypesEnum type, unsigned channelIdx, unsigned param) {
-    Tracer::Log("Executed [%u] command %u at channel %u with param %u.\n",
-                static_cast<unsigned>(result),
-                static_cast<unsigned>(type),
-                static_cast<unsigned>(channelIdx),
-                static_cast<unsigned>(param));
-  }   
-  
-  const size_t MAX_QUEUE_SIZE = 100;
-  const unsigned RED_CHANNEL_IDX = 14;
-  const unsigned GREEN_CHANNEL_IDX = 13;
-  const unsigned BLUE_CHANNEL_IDX = 12;
-  
-  void SwitchOff() {
-    DeviceController deviceController(MAX_QUEUE_SIZE, OnDeviceUpdate);
+    std::atomic<bool> NeedToStopPolling(false);
 
-    for (unsigned channelIdx = 0; channelIdx < DeviceController::CHANNELS_NUMBER; ++channelIdx) {
-      deviceController.AddCommand(DeviceController::SET_BRIGHTNESS, channelIdx, 0);
+    void SignalsHandler(int signal) {
+        Tracer::Log("Interrupted by signal %i.\n", signal);
+        NeedToStopPolling = true;
     }
 
-    if (deviceController.WaitForCommands(std::chrono::seconds(15))) {
-      Tracer::Log("All channels are switched off.\n");
+    bool IsSignalRaised(void) {
+        return NeedToStopPolling;
     }
-    else {
-      Tracer::Log("Failed to switch off.\n");
-    }
-  }
-  
-  void Sunrise(std::chrono::seconds duration) {
-    DeviceController deviceController(MAX_QUEUE_SIZE, OnDeviceUpdate);
-    
-    const std::chrono::milliseconds durationMs(duration);
-    const std::vector<unsigned> channels {RED_CHANNEL_IDX, GREEN_CHANNEL_IDX, BLUE_CHANNEL_IDX};
-    const std::chrono::milliseconds stepDuration = durationMs / DeviceController::BRIGHTNESS_MAX / channels.size();
 
-    for (unsigned brightness = 0; brightness <= DeviceController::BRIGHTNESS_MAX; ++brightness) {
-      
-      for (auto channel : channels) {
-        if (IsSignalRaised()) {
-          return;
+    void OnDeviceUpdate(bool result, DeviceController::CommandTypesEnum type, unsigned channelIdx, unsigned param) {
+        Tracer::Log("Executed [%u] command %u at channel %u with param %u.\n",
+                    static_cast<unsigned>(result),
+                    static_cast<unsigned>(type),
+                    static_cast<unsigned>(channelIdx),
+                    static_cast<unsigned>(param));
+    }
+
+    const size_t MAX_QUEUE_SIZE = 100;
+    const unsigned char RED_CHANNEL_IDX = 14;
+    const unsigned char GREEN_CHANNEL_IDX = 13;
+    const unsigned char BLUE_CHANNEL_IDX = 12;
+    const std::array<unsigned char, 3> CHANNELS {RED_CHANNEL_IDX, GREEN_CHANNEL_IDX, BLUE_CHANNEL_IDX};
+
+    void LinearEasing(DeviceController& controller,
+                          const unsigned char channelIdx,
+                          const unsigned char startBrightness,
+                          const unsigned char stopBrightness,
+                          const std::chrono::milliseconds& step) {
+
+        auto stepTime = std::chrono::steady_clock::now();
+        for (unsigned char brightness = startBrightness;
+             brightness <= stopBrightness && !IsSignalRaised();
+             ++brightness, stepTime += step) {
+
+            controller.AddCommand(DeviceController::SET_BRIGHTNESS, channelIdx, brightness);
+            std::this_thread::sleep_until(stepTime);
         }
-        
-        deviceController.AddCommand(DeviceController::SET_BRIGHTNESS, channel, brightness);
-        std::this_thread::sleep_for(stepDuration);
-      }
 
-    Tracer::Log("Sun is up.\n");
+        Tracer::Log("Sun %u is up.\n", channelIdx);
     }
-  }
+
+    void Sunset() {
+        DeviceController deviceController(MAX_QUEUE_SIZE, OnDeviceUpdate);
+
+        for (unsigned char channelIdx = 0; channelIdx < DeviceController::CHANNELS_NUMBER; ++channelIdx) {
+            deviceController.AddCommand(DeviceController::SET_BRIGHTNESS, channelIdx, 0);
+        }
+
+        if (deviceController.WaitForCommands(std::chrono::seconds(15))) {
+            Tracer::Log("All channels are switched off.\n");
+        }
+        else {
+            Tracer::Log("Failed to switch off.\n");
+        }
+    }
+
+    void Sunrise(const std::chrono::seconds& duration) {
+        DeviceController deviceController(MAX_QUEUE_SIZE, OnDeviceUpdate);
+
+        const std::chrono::milliseconds durationMs(duration);
+        const std::chrono::milliseconds stepDuration = durationMs / DeviceController::BRIGHTNESS_MAX / CHANNELS.size();
+
+        for (auto channel : CHANNELS) {
+            LinearEasing(deviceController, channel, 0, DeviceController::BRIGHTNESS_MAX, stepDuration);
+        }
+
+        Tracer::Log("The Sun is up.\n");
+
+    }
 }

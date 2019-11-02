@@ -1,0 +1,12 @@
+# Ignore build directories
+build/
+
+# Ignore KDevelop projects
+*.kdev4*
+
+# Ignore QtCreatot user specific files
+CMakeLists.txt.user
+CMakeLists.txt.user.*
+
+# Ignore VS project settings
+*.vs

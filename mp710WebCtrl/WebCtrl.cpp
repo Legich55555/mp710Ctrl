@@ -27,10 +27,10 @@
 #include <cstdio>
 #include <functional>
 
-#include "../thirdparty/mongoose/mongoose.h"
+#include "thirdparty/mongoose/mongoose.h"
 
-#include "../tracer/Tracer.h"
-#include "../mp710Lib/DeviceController.h"
+#include "tracer/Tracer.h"
+#include "mp710Lib/DeviceController.h"
 
 namespace {
     void SignalsHandler(int signal);
@@ -109,7 +109,32 @@ namespace {
             case MG_EV_HTTP_REQUEST: {
                 /* Usual HTTP request - serve static files */
                 struct http_message* hm = reinterpret_cast<http_message*>(eventData);
-                mg_serve_http(nc, hm, serveHttpOpts);
+//                 if (strncmp(hm->method, "POST", 4) == 0)
+//                 {
+//                   char n1[100], n2[100];
+//   double result;
+// 
+//   /* Get form variables */
+//   mg_get_http_var(&hm->body, "n1", n1, sizeof(n1));
+//   mg_get_http_var(&hm->body, "n2", n2, sizeof(n2));
+// 
+//   /* Send headers */
+//   mg_printf(nc, "%s", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+// 
+//   /* Compute the result and send it back as a JSON object */
+//   result = strtod(n1, NULL) + strtod(n2, NULL);
+//   mg_printf_http_chunk(nc, "{ \"result\": %lf }", result);
+//   mg_send_http_chunk(nc, "", 0); /* Send empty chunk, the end of response */
+//                   
+//                   
+//                   
+//                   
+//                 }
+//                 else
+                {
+                  mg_serve_http(nc, hm, serveHttpOpts);
+                }
+                
                 nc->flags |= MG_F_SEND_AND_CLOSE;
                 break;
             }
@@ -119,7 +144,7 @@ namespace {
                 break;
             }
             case MG_EV_WEBSOCKET_FRAME: {
-                /* New websocket message. Tell everybody. */
+                /* New websocket message. */
                 struct websocket_message* wm = reinterpret_cast<websocket_message*>(eventData);
                 
                 unsigned commandType(DeviceController::NOT_SET);

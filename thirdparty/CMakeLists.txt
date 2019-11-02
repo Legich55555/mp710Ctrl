@@ -1,1 +1,8 @@
 add_subdirectory(mongoose)
+
+set(CIVETWEB_DISABLE_CGI ON)
+set(CIVETWEB_ENABLE_WEBSOCKETS ON)
+set(CIVETWEB_ENABLE_SSL OFF)
+set(CIVETWEB_ENABLE_CXX OFF)
+set(BUILD_TESTING OFF)
+#add_subdirectory(civetweb)
