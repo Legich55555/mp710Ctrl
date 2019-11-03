@@ -7,9 +7,11 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 
 message(STATUS "CMAKE_BUILD_TYPE = ${CMAKE_BUILD_TYPE}")
+message(STATUS "CMAKE_ENABLE_EXPORTS = ${CMAKE_ENABLE_EXPORTS}")
+
 string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type_lower)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_C99 -O1 -std=c++11 -static-libstdc++ -Wall -fno-exceptions -fno-rtti -fdata-sections -ffunction-sections -Wl,--gc-sections -DNDEBUG")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_C99 -std=c++11 -static-libstdc++ -Wall -fno-exceptions -fno-rtti -fdata-sections -ffunction-sections -Wl,--gc-sections -DNDEBUG")
 if (build_type_lower STREQUAL "release" OR build_type_lower STREQUAL "minsizerel")
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections -Wl,--gc-sections")
 #    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Os -fno-exceptions -fno-stack-protector -fno-rtti -ffunction-sections -fdata-sections -Wl,--gc-sections")
