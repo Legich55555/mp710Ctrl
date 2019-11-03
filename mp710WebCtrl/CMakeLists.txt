@@ -4,6 +4,7 @@ add_custom_target(copyHtmlContent
 # WebCtrl which uses mongoose
 add_executable(mp710WebCtrl WebCtrl.cpp)
 target_link_libraries(mp710WebCtrl mongoose pthread mp710CtrlLib)
+set_target_properties(mp710WebCtrl PROPERTIES ENABLE_EXPORTS OFF)
 add_dependencies(mp710WebCtrl copyHtmlContent)
 install(TARGETS mp710WebCtrl RUNTIME DESTINATION bin)
 
