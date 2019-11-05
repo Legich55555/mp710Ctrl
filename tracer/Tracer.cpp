@@ -68,7 +68,8 @@ namespace Tracer {
     
     char errorMessageBuff[128] = {0};
     
-#if (_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && ! _GNU_SOURCE
+//#if (_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && ! _GNU_SOURCE
+#if 1
     const bool r = (0 == strerror_r(errno, errorMessageBuff, sizeof(errorMessageBuff)));
 #else
     const bool r = (nullptr != strerror_r(errno, errorMessageBuff, sizeof(errorMessageBuff)));
