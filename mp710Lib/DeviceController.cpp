@@ -286,7 +286,7 @@ void DeviceController::WorkerThreadFunc() {
                   return item.ChannelIdx == cmd.ChannelIdx;
                 };
 
-                // Find tha last command with same channelIdx
+                // Find the last command with same channelIdx
                 auto rIt = std::find_if(_commandsQueue.rbegin(), _commandsQueue.rend(), isSameChannelIdx);
                 if (rIt != _commandsQueue.rend()) {
                   cmd = *rIt;
