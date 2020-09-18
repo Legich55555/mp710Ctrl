@@ -89,7 +89,9 @@
   var SLIDER_SLOP = 4;
   var SLIDER_RATE = (MAX_COLOR_VALUE - 2 * SLIDER_SLOP) / MAX_BRIGHTNESS_VALUE;
   
-  var BRIGHNESS_COMMAND_TYPE = "0";
+  var SET_BRIGHTNESS_COMMAND = "1";
+  var START_SUNRISE_COMMAND = "2";
+  var START_SUNSET_COMMAND = "3";
 
   function brightnessToColor(brightnessR, brightnessG, brightnessB) {
     var colorComponents = [Math.min(brightnessR * 2, 255).toString(16), 
@@ -148,23 +150,34 @@
     
     var isInitialized = false;
 
-    function sendCommand(commandType, channelIdx, param) {
+    function sendCommand(commandType, param, channels) {
       if (ws.readyState != 1) {
         console.log("Command is ignored because websocket is not ready.");
         return;
       }
       
-      ws.send(["{" + commandType, channelIdx, param + "}"].join());
+      var commandMsg = [commandType, param];
+      commandMsg.push(...channels);
+      
+      ws.send(commandMsg.join());
     }
     
-    function setBrightness(channelIdx, brightness) {
-      sendCommand(BRIGHNESS_COMMAND_TYPE, channelIdx, brightness);
+    function setBrightness(brightness, channels) {
+      sendCommand(SET_BRIGHTNESS_COMMAND, brightness, channels);
+    }
+    
+    function startSunrise() {
+      sendCommand(START_SUNRISE_COMMAND, 0, [RED_CHANNEL_IDX, GREEN_CHANNEL_IDX, BLUE_CHANNEL_IDX]);
+    }
+    
+    function startSunset() {
+      sendCommand(START_SUNSET_COMMAND, 0, [RED_CHANNEL_IDX, GREEN_CHANNEL_IDX, BLUE_CHANNEL_IDX]);
     }
     
     function adjustBrightness(channelIdx, delta) {
       var brightness = sliderToBrightness(channelsToWidgets[channelIdx].slider("value")) + delta;
       if (brightness >= 0 && brightness <= MAX_BRIGHTNESS_VALUE) {
-        setBrightness(channelIdx, brightness);
+        setBrightness(brightness, [channelIdx]);
       }
     }
     
@@ -173,7 +186,7 @@
 
       var brightness = sliderToBrightness(channelsToWidgets[channelIdx].slider("value"));
       
-      sendCommand(BRIGHNESS_COMMAND_TYPE, channelIdx, brightness);
+      sendCommand(SET_BRIGHTNESS_COMMAND, brightness, [channelIdx]);
     }
     
     // Initialize except event handlers
@@ -205,31 +218,35 @@
     window.ws = new WebSocket('ws://' + location.host + '/ws');
 
     ws.onopen = function(ev) {
-      document.getElementById('redOn').onclick = function(ev) { setBrightness(RED_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
-      document.getElementById('redOff').onclick = function(ev) { setBrightness(RED_CHANNEL_IDX, 0); };
+      document.getElementById('redOn').onclick = function(ev) { setBrightness(MAX_BRIGHTNESS_VALUE, [RED_CHANNEL_IDX]); };
+      document.getElementById('redOff').onclick = function(ev) { setBrightness(0, [RED_CHANNEL_IDX]); };
       document.getElementById('redInc').onclick = function(ev) { adjustBrightness(RED_CHANNEL_IDX, 1) };
       document.getElementById('redDec').onclick = function(ev) { adjustBrightness(RED_CHANNEL_IDX, -1) };
 
-      document.getElementById('greenOn').onclick = function(ev) { setBrightness(GREEN_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
-      document.getElementById('greenOff').onclick = function(ev) { setBrightness(GREEN_CHANNEL_IDX, 0); };
+      document.getElementById('greenOn').onclick = function(ev) { setBrightness(MAX_BRIGHTNESS_VALUE, [GREEN_CHANNEL_IDX]); };
+      document.getElementById('greenOff').onclick = function(ev) { setBrightness(0, [GREEN_CHANNEL_IDX]); };
       document.getElementById('greenInc').onclick = function(ev) { adjustBrightness(GREEN_CHANNEL_IDX, 1) };
       document.getElementById('greenDec').onclick = function(ev) { adjustBrightness(GREEN_CHANNEL_IDX, -1) };
       
-      document.getElementById('blueOn').onclick = function(ev) { setBrightness(BLUE_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); };
-      document.getElementById('blueOff').onclick = function(ev) { setBrightness(BLUE_CHANNEL_IDX, 0); };
+      document.getElementById('blueOn').onclick = function(ev) { setBrightness(MAX_BRIGHTNESS_VALUE, [BLUE_CHANNEL_IDX]); };
+      document.getElementById('blueOff').onclick = function(ev) { setBrightness(0, [BLUE_CHANNEL_IDX]); };
       document.getElementById('blueInc').onclick = function(ev) { adjustBrightness(BLUE_CHANNEL_IDX, 1) };
       document.getElementById('blueDec').onclick = function(ev) { adjustBrightness(BLUE_CHANNEL_IDX, -1) };
       
       document.getElementById('allOn').onclick = function(ev) { 
-        setBrightness(RED_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); 
-        setBrightness(GREEN_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); 
-        setBrightness(BLUE_CHANNEL_IDX, MAX_BRIGHTNESS_VALUE); 
+        setBrightness(MAX_BRIGHTNESS_VALUE, [RED_CHANNEL_IDX, GREEN_CHANNEL_IDX, BLUE_CHANNEL_IDX]);
       };
       
       document.getElementById('allOff').onclick = function(ev) { 
-        setBrightness(RED_CHANNEL_IDX, 0); 
-        setBrightness(GREEN_CHANNEL_IDX, 0); 
-        setBrightness(BLUE_CHANNEL_IDX, 0); 
+        setBrightness(0, [RED_CHANNEL_IDX, GREEN_CHANNEL_IDX, BLUE_CHANNEL_IDX]);
+      };
+
+      document.getElementById('startSunrise').onclick = function(ev) { 
+        startSunrise();
+      };
+
+      document.getElementById('startSunset').onclick = function(ev) { 
+        startSunset();
       };
     };
     
@@ -328,6 +345,8 @@
     <div style="margin-top: 5px; margin-bottom: 5px;">
       <input id="allOff" type="submit" value="Общий Выкл" class="left-column button-fix wide-button"></input>
       <input id="allOn" type="submit" value="Общий Вкл" class="left-column button-fix wide-button"></input>
+      <input id="startSunrise" type="submit" value="Рассвет" class="left-column button-fix wide-button"></input>
+      <input id="startSunset" type="submit" value="Закат" class="left-column button-fix wide-button"></input>
     </div>
     
   </div>

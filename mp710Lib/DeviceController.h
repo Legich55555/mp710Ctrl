@@ -24,64 +24,79 @@
 
 #include <list>
 #include <vector>
-#include <tuple>
 #include <mutex>
 #include <thread>
-#include <condition_variable>
+#include <cstdint>
 #include <functional>
+#include <condition_variable>
 
-class DeviceController {
+class DeviceController
+{
 public:
-    
-    static const unsigned char CHANNELS_NUMBER;
-    static const unsigned char BRIGHTNESS_MAX;
-    
-    enum CommandTypesEnum {SET_BRIGHTNESS = 0, NOT_SET = 0xFFFF};
-    
+    const static std::uint8_t kChannelNumber;
+    const static std::uint8_t kBrightnessMax;
+
+    enum CommandType : std::uint8_t
+    {
+        kNotSet = 0U,
+        kSetBrightness = 1U,
+        kStartSunrise = 2U,
+        kStartSunset = 3U,
+    };
+
     struct Command
     {
-        CommandTypesEnum Type;
-        unsigned char ChannelIdx;
-        unsigned char Param;
-        
-        Command() 
-            : Type(NOT_SET), ChannelIdx(CHANNELS_NUMBER), Param(0)
-        { }
+        CommandType Type = CommandType::kNotSet;
+        std::int8_t ChannelIdx = INT8_MAX;
+        std::uint8_t Param1 = 0U;
+    };
 
-        Command(CommandTypesEnum type, unsigned char channelIdx, unsigned char param)
-            : Type(type), ChannelIdx(channelIdx), Param(param)
-        { }
-    };    
-    
-    typedef std::function<void(bool result, DeviceController::CommandTypesEnum command, unsigned channelIdx, unsigned param)> DoneCallback;
-    
-    DeviceController(size_t maxCommandQueueSize, DoneCallback doneCallback);
+    struct Channel
+    {
+        std::int8_t Idx = INT8_MAX;
+        std::uint8_t Param1 = 0U;
+    };
+
+    typedef std::function<void(bool result, const DeviceController::Command& command)> OnChangeCallback;
+
+    typedef std::function<std::vector<Channel>(const std::vector<std::uint8_t>& startState,
+        const std::chrono::milliseconds& duration,
+        const std::chrono::milliseconds& elapsed)>
+        TransitionControllerCallback;
+
+    DeviceController(size_t commandQueueSize, OnChangeCallback doneCallback);
     ~DeviceController();
-    
-    void AddCommand(CommandTypesEnum type, unsigned char channelIdx, unsigned char param);
+
+    void RunTransition(TransitionControllerCallback controllerCallback, std::chrono::milliseconds duration);
+    void AddCommand(CommandType type, std::uint8_t param, const std::vector<std::int8_t>& channels);
+    void AddCommand(CommandType type, std::uint8_t param, std::int8_t channelIdx);
     void AddCommand(const Command& command);
     bool WaitForCommands(std::chrono::milliseconds timeout);
     void Reset();
-    std::vector<Command> GetLastCommands() const;
-    
+    std::vector<Channel> GetChannelValues() const;
+
     DeviceController(const DeviceController&) = delete;
     DeviceController& operator=(const DeviceController&) = delete;
 
-private:    
-    
+private:
     bool ExecCommand(const Command& command);
     void WorkerThreadFunc();
-    
+
     const size_t _maxQueueSize;
     volatile bool _shouldStop;
     std::list<Command> _commandsQueue;
-    std::vector<Command> _lastCommands;
+    std::vector<std::uint8_t> _lastChannelValues;
 
     std::thread _workerThread;
     mutable std::mutex _queueMutex;
     mutable std::condition_variable _isQueueEmptyCondition;
-    
-    DoneCallback _doneCallback;    
+
+    OnChangeCallback _onChangeCallback;
+
+    std::vector<std::uint8_t> _transitionStartState;
+    std::chrono::steady_clock::time_point _transitionStartTime;
+    std::chrono::milliseconds _transitionDuration;
+    TransitionControllerCallback _transitionControllerCallback;
 };
 
-#endif // DEVICECONTROLLER_H
+#endif  // DEVICECONTROLLER_H

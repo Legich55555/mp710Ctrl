@@ -22,52 +22,58 @@
 #include "Tracer.h"
 
 #include <cstdio>
-#include <cstdarg> 
+#include <cstdarg>
 #include <cstring>
 #include <syslog.h>
 #include <errno.h>
 
-namespace Tracer {
-  static const char* TraceName = "UvcStreamer"; 
-  
-  namespace {
-    bool IsStdErrReady() {
-      return fileno(stderr) != -1;
-    }
-    
-    void LogVArgs(const char* format, va_list args) {
-      
-      if (IsStdErrReady()) {
+namespace Tracer
+{
+
+namespace
+{
+
+static const char* TraceName = "UvcStreamer";
+
+bool IsStdErrReady()
+{
+    return fileno(stderr) != -1;
+}
+
+void LogVArgs(const char* format, va_list args)
+{
+
+    if (IsStdErrReady()) {
         std::vfprintf(stderr, format, args);
-      }
-      else {
+    } else {
         static bool isSysLogInitialized = false;
         if (!isSysLogInitialized) {
-          ::openlog(Tracer::TraceName, LOG_ODELAY, LOG_USER | LOG_ERR);
-          isSysLogInitialized = true;
+            ::openlog(Tracer::TraceName, LOG_ODELAY, LOG_USER | LOG_ERR);
+            isSysLogInitialized = true;
         }
 
         ::vsyslog(LOG_ERR, format, args);
-      }
     }
-  }
+}
+}  // namespace
 
-
-  void Log(const char* format, ...) {
+void Log(const char* format, ...)
+{
     va_list args;
     va_start(args, format);
     LogVArgs(format, args);
     va_end(args);
-  }
-  
-  void LogErrNo(const char* format, ...) {
+}
+
+void LogErrNo(const char* format, ...)
+{
     va_list args;
     va_start(args, format);
     LogVArgs(format, args);
     va_end(args);
-    
+
     char errorMessageBuff[128] = {0};
-    
+
 //#if (_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && ! _GNU_SOURCE
 #if 1
     const bool r = (0 == strerror_r(errno, errorMessageBuff, sizeof(errorMessageBuff)));
@@ -78,5 +84,5 @@ namespace Tracer {
     if (r) {
         Log("%s\n", errorMessageBuff);
     }
-  }
 }
+}  // namespace Tracer

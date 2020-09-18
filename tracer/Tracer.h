@@ -22,9 +22,10 @@
 #ifndef TRACER_H
 #define TRACER_H
 
-namespace Tracer {
-  void Log(const char* format, ...);
-  void LogErrNo(const char* format, ...);
-}
+namespace Tracer
+{
+void Log(const char* format, ...);
+void LogErrNo(const char* format, ...);
+}  // namespace Tracer
 
-#endif // TRACER_H
+#endif  // TRACER_H
