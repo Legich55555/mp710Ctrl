@@ -67,12 +67,12 @@ public:
     DeviceController(size_t commandQueueSize, OnChangeCallback doneCallback);
     ~DeviceController();
 
+    void SetChangeCallback(OnChangeCallback doneCallback);
     void RunTransition(TransitionControllerCallback controllerCallback, std::chrono::milliseconds duration);
     void AddCommand(CommandType type, std::uint8_t param, const std::vector<std::int8_t>& channels);
     void AddCommand(CommandType type, std::uint8_t param, std::int8_t channelIdx);
     void AddCommand(const Command& command);
-    bool WaitForCommands(std::chrono::milliseconds timeout);
-    void Reset();
+    bool WaitForCommands(std::chrono::milliseconds timeout, bool (*isSignalRaised)(void));
     std::vector<Channel> GetChannelValues() const;
 
     DeviceController(const DeviceController&) = delete;

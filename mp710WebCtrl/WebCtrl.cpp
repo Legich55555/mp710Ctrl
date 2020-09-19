@@ -43,18 +43,35 @@ void Broadcast(mg_connection* nc, const char* msg, size_t size);
 void EventHandler(mg_connection* nc, int event, void* eventData);
 void SendUpdate(struct mg_connection* nc, const std::vector<DeviceController::Channel>& channels);
 void OnDeviceUpdate(struct mg_connection* netConnection, bool result, const DeviceController::Command& command);
+std::vector<DeviceController::Channel> SunriseController(const std::vector<std::uint8_t>& startState,
+    const std::chrono::milliseconds& duration,
+    const std::chrono::milliseconds& elapsed);
+std::vector<DeviceController::Channel> SunsetController(const std::vector<std::uint8_t>& startState,
+    const std::chrono::milliseconds& duration,
+    const std::chrono::milliseconds& elapsed);
 
 mg_serve_http_opts serveHttpOpts = {.document_root = "."};
+
+constexpr std::uint8_t kRedChannelIdx = 14U;
+constexpr std::uint8_t kGreenChannelIdx = 13U;
+constexpr std::uint8_t kBlueChannelIdx = 12U;
 }  // namespace
 
 int main(int argc, char** argv)
 {
-
     signal(SIGTERM, SignalsHandler);
     signal(SIGINT, SignalsHandler);
 
     constexpr char kDefaultAddress[] = "8000";  // If only port is set then the server will listen on all IPv4 interfaces
     const char* address = kDefaultAddress;
+
+    constexpr char kWebMode[] = "web";  // web - run a webserver
+    constexpr char kSunsetMode[] = "sunset";  // sunset - execute sunset
+    constexpr char kSunriseMode[] = "sunrise";  // sunrise - execute sunset
+    const char* mode = kWebMode;
+
+    constexpr char kDefaultDuration[] = "900";  // 900 seconds
+    const char* duration = kDefaultDuration;
 
     for (int i = 0; i < argc; ++i) {
         if (strcmp(argv[i], "--workDir") == 0) {
@@ -63,6 +80,20 @@ int main(int argc, char** argv)
                 serveHttpOpts.document_root = argv[i];
             } else {
                 Tracer::Log("Invalid argument '--workDir' was ignored.\n");
+            }
+        } else if (strcmp(argv[i], "--mode") == 0) {
+            ++i;
+            if (i < argc) {
+                mode = argv[i];
+            } else {
+                Tracer::Log("Invalid argument '--mode' was ignored.\n");
+            }
+        } else if (strcmp(argv[i], "--duration") == 0) {
+            ++i;
+            if (i < argc) {
+                duration = argv[i];
+            } else {
+                Tracer::Log("Invalid argument '--duration' was ignored.\n");
             }
         } else if (strcmp(argv[i], "--port") == 0) {
             ++i;
@@ -76,36 +107,61 @@ int main(int argc, char** argv)
         }
     }
 
-    mg_mgr mgr;
-    mg_mgr_init(&mgr, nullptr);
-
-    mg_connection* netConnection = mg_bind(&mgr, address, EventHandler);
-    if (nullptr == netConnection) {
-        Tracer::Log("Failed to initialize listenning on addres %s.\n", address);
-        return EXIT_FAILURE;
-    }
-
-    constexpr size_t MAX_QUEUE_SIZE = 100;
-    DeviceController::OnChangeCallback doneCallback
-        = std::bind(&OnDeviceUpdate, netConnection, std::placeholders::_1, std::placeholders::_2);
-    DeviceController deviceController(MAX_QUEUE_SIZE, doneCallback);
+    constexpr size_t kQueueSize = 100;
+    DeviceController deviceController(kQueueSize, nullptr);
 
     // Turn off all channels
     for (unsigned char channelIdx = 0; channelIdx < DeviceController::kChannelNumber; ++channelIdx) {
         deviceController.AddCommand(DeviceController::CommandType::kSetBrightness, 0, channelIdx);
     }
-    deviceController.WaitForCommands(std::chrono::milliseconds(3000U));
+    deviceController.WaitForCommands(std::chrono::seconds(3), &IsSignalRaised);
 
-    netConnection->user_data = &deviceController;
-    mg_set_protocol_http_websocket(netConnection);
+    if (strcmp(mode, kWebMode) != 0) {
+        unsigned durationValue = strtoul(duration, nullptr, 10);
+        if (durationValue == 0) {
+            durationValue = 15;
+        }
 
-    while (!IsSignalRaised()) {
-        mg_mgr_poll(&mgr, 200);
+        if (strcmp(mode, kSunriseMode) == 0) {
+            deviceController.RunTransition(&SunriseController, std::chrono::seconds(durationValue));
+        } else {
+            deviceController.AddCommand(DeviceController::CommandType::kSetBrightness, DeviceController::kBrightnessMax, kRedChannelIdx);
+            deviceController.AddCommand(DeviceController::CommandType::kSetBrightness, DeviceController::kBrightnessMax, kGreenChannelIdx);
+            deviceController.AddCommand(DeviceController::CommandType::kSetBrightness, DeviceController::kBrightnessMax, kBlueChannelIdx);
+            deviceController.WaitForCommands(std::chrono::seconds(1), &IsSignalRaised);
+
+            if (strcmp(mode, kSunsetMode) == 0) {
+                deviceController.RunTransition(&SunsetController, std::chrono::seconds(durationValue));
+            } else {
+                deviceController.RunTransition(&SunsetController, std::chrono::seconds(15));
+            }
+        }
+
+        deviceController.WaitForCommands(std::chrono::minutes(15), &IsSignalRaised);
+    } else {
+        mg_mgr mgr;
+        mg_mgr_init(&mgr, nullptr);
+
+        mg_connection* netConnection = mg_bind(&mgr, address, EventHandler);
+        if (nullptr == netConnection) {
+            Tracer::Log("Failed to initialize listenning on addres %s.\n", address);
+            return EXIT_FAILURE;
+        }
+
+        DeviceController::OnChangeCallback doneCallback
+            = std::bind(&OnDeviceUpdate, netConnection, std::placeholders::_1, std::placeholders::_2);
+
+        deviceController.SetChangeCallback(doneCallback);
+
+        netConnection->user_data = &deviceController;
+        mg_set_protocol_http_websocket(netConnection);
+
+        while (!IsSignalRaised()) {
+            mg_mgr_poll(&mgr, 200);
+        }
+
+        mg_mgr_free(&mgr);
     }
-
-    Tracer::Log("Stopping...\n");
-
-    mg_mgr_free(&mgr);
 
     return EXIT_SUCCESS;
 }
@@ -189,10 +245,6 @@ std::vector<DeviceController::Channel> SunriseController(const std::vector<std::
     const std::chrono::milliseconds& duration,
     const std::chrono::milliseconds& elapsed)
 {
-    constexpr std::uint8_t kRedChannelIdx = 14U;
-    constexpr std::uint8_t kGreenChannelIdx = 13U;
-    constexpr std::uint8_t kBlueChannelIdx = 12U;
-
     const std::chrono::milliseconds phaseDuration = duration / 3;
 
     std::uint8_t redValue = startState[kRedChannelIdx];
@@ -233,10 +285,6 @@ std::vector<DeviceController::Channel> SunsetController(const std::vector<std::u
     const std::chrono::milliseconds& duration,
     const std::chrono::milliseconds& elapsed)
 {
-    constexpr std::uint8_t kRedChannelIdx = 14U;
-    constexpr std::uint8_t kGreenChannelIdx = 13U;
-    constexpr std::uint8_t kBlueChannelIdx = 12U;
-
     const std::chrono::milliseconds phaseDuration = duration / 3;
 
     std::uint8_t redValue = startState[kRedChannelIdx];
@@ -254,7 +302,6 @@ std::vector<DeviceController::Channel> SunsetController(const std::vector<std::u
         const std::chrono::milliseconds phaseElapsed = elapsed - (2 * phaseDuration);
 
         redValue = LinearTransform(startState[kRedChannelIdx], 0, phaseElapsed.count(), phaseDuration.count());
-        Tracer::Log("Red value %u %u %u.\n", unsigned(redValue), unsigned(phaseElapsed.count()), unsigned(phaseDuration.count()));
         greenValue = 0;
         blueValue = 0;
     }
@@ -273,7 +320,6 @@ std::vector<DeviceController::Channel> SunsetController(const std::vector<std::u
 
 void EventHandler(mg_connection* nc, int event, void* eventData)
 {
-
     DeviceController* deviceController = reinterpret_cast<DeviceController*>(nc->user_data);
 
     switch (event) {
@@ -303,9 +349,9 @@ void EventHandler(mg_connection* nc, int event, void* eventData)
                 deviceController->AddCommand(
                     commandType, commandParam, std::vector<std::int8_t>(commandParams.begin() + 2, commandParams.end()));
             } else if (commandType == DeviceController::kStartSunrise) {
-                deviceController->RunTransition(&SunriseController, std::chrono::seconds(15));
+                deviceController->RunTransition(&SunriseController, std::chrono::minutes(15));
             } else if (commandType == DeviceController::kStartSunset) {
-                deviceController->RunTransition(&SunsetController, std::chrono::seconds(15));
+                deviceController->RunTransition(&SunsetController, std::chrono::minutes(15));
             } else {
                 Tracer::Log("The command is ignored because the type is unexpected.\n");
             }

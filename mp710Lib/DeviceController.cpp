@@ -110,7 +110,7 @@ public:
     {}
 
     ControlMessage(std::uint8_t channelIdx, std::uint8_t brightness)
-        : ControlMessage(channelIdx, brightness, ChangeType::kINC_M_DEC, 30U, 1U)
+        : ControlMessage(channelIdx, brightness, ChangeType::kNC, 30U, 1U)
     {}
 
     std::uint8_t* GetData()
@@ -152,6 +152,13 @@ DeviceController::~DeviceController()
     _workerThread.join();
 }
 
+void DeviceController::SetChangeCallback(DeviceController::OnChangeCallback onChangeCallback)
+{
+    std::unique_lock<std::mutex> queueLock(_queueMutex);
+
+    _onChangeCallback = onChangeCallback;
+}
+
 void DeviceController::RunTransition(DeviceController::TransitionControllerCallback controllerCallback, std::chrono::milliseconds duration)
 {
     if (controllerCallback == nullptr || duration.count() <= 0) {
@@ -173,7 +180,6 @@ void DeviceController::RunTransition(DeviceController::TransitionControllerCallb
 
 void DeviceController::AddCommand(DeviceController::CommandType type, uint8_t param, const std::vector<int8_t>& channels)
 {
-
     for (const auto channel : channels) {
         AddCommand(type, param, channel);
     }
@@ -181,13 +187,11 @@ void DeviceController::AddCommand(DeviceController::CommandType type, uint8_t pa
 
 void DeviceController::AddCommand(CommandType type, std::uint8_t param, std::int8_t channelIdx)
 {
-
     AddCommand(Command{type, channelIdx, param});
 }
 
 void DeviceController::AddCommand(const Command& command)
 {
-
     std::unique_lock<std::mutex> queueLock(_queueMutex);
 
     _transitionControllerCallback = nullptr;
@@ -200,32 +204,39 @@ void DeviceController::AddCommand(const Command& command)
     _commandsQueue.push_back(command);
 }
 
-bool DeviceController::WaitForCommands(std::chrono::milliseconds timeout)
+bool DeviceController::WaitForCommands(std::chrono::milliseconds timeout, bool (*isSignalRaised)(void))
 {
+    typedef std::chrono::time_point<std::chrono::steady_clock, std::chrono::milliseconds> SteadyClockTimePoint;
+
+    SteadyClockTimePoint deadlineTime = std::chrono::time_point_cast<SteadyClockTimePoint::duration>(std::chrono::steady_clock::now());
+    deadlineTime += timeout;
 
     while (!_shouldStop) {
-        {
-            std::unique_lock<std::mutex> queueLock(_queueMutex);
-            if (_commandsQueue.empty()) {
-                return true;
-            }
-        }
 
         {
             std::unique_lock<std::mutex> lock(_queueMutex);
-            if (_isQueueEmptyCondition.wait_for(lock, timeout) == std::cv_status::timeout) {
-                return _commandsQueue.empty();
+
+            if (_commandsQueue.empty() && _transitionControllerCallback == nullptr) {
+                return true;
+            }
+
+            _isQueueEmptyCondition.wait_for(lock, std::chrono::milliseconds(15));
+
+            SteadyClockTimePoint currentTime
+                = std::chrono::time_point_cast<SteadyClockTimePoint::duration>(std::chrono::steady_clock::now());
+            if (deadlineTime < currentTime) {
+                return (_commandsQueue.empty() || _transitionControllerCallback == nullptr);
             }
         }
 
-        // It is a spurious wakeup
+        if (isSignalRaised != nullptr && isSignalRaised()) {
+            Tracer::Log("Signal is raised, stopping....\n");
+            _shouldStop = true;
+        }
     }
 
     return false;
 }
-
-void DeviceController::Reset()
-{}
 
 std::vector<DeviceController::Channel> DeviceController::GetChannelValues() const
 {
@@ -240,7 +251,6 @@ std::vector<DeviceController::Channel> DeviceController::GetChannelValues() cons
 
 bool DeviceController::ExecCommand(const Command& command)
 {
-
     libusb_device_handle* handle = libusb_open_device_with_vid_pid(nullptr, kDeviceVendorId, kDeviceProductId);
     if (nullptr == handle) {
         Tracer::Log("Failed to open device\n");
@@ -292,18 +302,33 @@ bool DeviceController::ExecCommand(const Command& command)
 
 void DeviceController::WorkerThreadFunc()
 {
-
     libusb_init(nullptr);
     libusb_set_debug(nullptr, libusb_log_level::LIBUSB_LOG_LEVEL_WARNING);
 
     while (!_shouldStop) {
 
         Command cmd;
+        bool isQueueEmpty = false;
+
+        OnChangeCallback onChangeCallback;
+
+        std::vector<std::uint8_t> transitionStartState(0);
+        std::chrono::steady_clock::time_point transitionStartTime;
+        std::chrono::milliseconds transitionDuration;
+        TransitionControllerCallback transitionControllerCallback;
 
         {
             std::unique_lock<std::mutex> queueLock(_queueMutex);
 
-            if (_commandsQueue.size() != 0) {
+            onChangeCallback = _onChangeCallback;
+            isQueueEmpty = _commandsQueue.empty();
+
+            transitionStartState = _transitionStartState;
+            transitionStartTime = _transitionStartTime;
+            transitionDuration = _transitionDuration;
+            transitionControllerCallback = _transitionControllerCallback;
+
+            if (_commandsQueue.size()) {
                 cmd = _commandsQueue.front();
                 _commandsQueue.pop_front();
 
@@ -322,41 +347,46 @@ void DeviceController::WorkerThreadFunc()
         if (cmd.Type != kNotSet) {
             ExecCommand(cmd);
 
-            if (_onChangeCallback != nullptr) {
-                _onChangeCallback(true, cmd);
-            }
-        } else {
-            if (_transitionControllerCallback != nullptr) {
-
-                auto elapsed
-                    = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _transitionStartTime);
-
-                std::vector<Channel> newState = _transitionControllerCallback(_transitionStartState, _transitionDuration, elapsed);
-                for (size_t i = 0; i < newState.size(); ++i) {
-                    if (newState[i].Param1 != _lastChannelValues[newState[i].Idx]) {
-
-                        cmd.Type = kSetBrightness;
-                        cmd.ChannelIdx = newState[i].Idx;
-                        cmd.Param1 = newState[i].Param1;
-
-                        ExecCommand(cmd);
-
-                        if (_onChangeCallback != nullptr) {
-                            _onChangeCallback(true, cmd);
-                        }
-                    }
-                }
-
-                if (elapsed >= _transitionDuration) {
-                    _transitionControllerCallback = nullptr;
-                }
-            } else {
-                _isQueueEmptyCondition.notify_one();
-                std::this_thread::sleep_for(std::chrono::milliseconds(15));
+            if (onChangeCallback != nullptr) {
+                onChangeCallback(true, cmd);
             }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        if (transitionControllerCallback != nullptr) {
+
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _transitionStartTime);
+            std::vector<Channel> newState = transitionControllerCallback(_transitionStartState, _transitionDuration, elapsed);
+
+            for (size_t i = 0; i < newState.size(); ++i) {
+                if (newState[i].Param1 != _lastChannelValues[newState[i].Idx]) {
+
+                    cmd.Type = kSetBrightness;
+                    cmd.ChannelIdx = newState[i].Idx;
+                    cmd.Param1 = newState[i].Param1;
+
+                    ExecCommand(cmd);
+
+                    if (onChangeCallback != nullptr) {
+                        onChangeCallback(true, cmd);
+                    }
+                }
+            }
+
+            {
+                std::unique_lock<std::mutex> queueLock(_queueMutex);
+
+                // If the transition finished then remove the transition callback
+                if (elapsed >= transitionDuration && transitionStartTime == _transitionStartTime) {
+                    _transitionControllerCallback = nullptr;
+                    transitionControllerCallback = nullptr;
+                }
+            }
+        }
+
+        if (isQueueEmpty && transitionControllerCallback == nullptr) {
+            _isQueueEmptyCondition.notify_one();
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
     }
 
     libusb_exit(nullptr);

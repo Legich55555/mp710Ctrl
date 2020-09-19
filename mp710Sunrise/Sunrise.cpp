@@ -112,7 +112,7 @@ void Sunset()
         deviceController.AddCommand(DeviceController::kSetBrightness, 0, channelIdx);
     }
 
-    if (deviceController.WaitForCommands(std::chrono::seconds(15))) {
+    if (deviceController.WaitForCommands(std::chrono::seconds(15), &IsSignalRaised)) {
         Tracer::Log("All channels are switched off.\n");
     } else {
         Tracer::Log("Failed to switch off.\n");
