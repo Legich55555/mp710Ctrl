@@ -18,6 +18,9 @@ start_instance() {
 	config_get port "$1" 'port' '8000'
 	procd_append_param command --port $port
 
+	config_get mode "$1" 'mode' 'web'
+	procd_append_param command --mode $mode
+
 	procd_close_instance
 }
 
