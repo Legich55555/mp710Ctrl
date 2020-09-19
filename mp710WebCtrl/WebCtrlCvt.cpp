@@ -258,12 +258,8 @@ int main(int argc, char** argv)
     }
 
     static const size_t MAX_QUEUE_SIZE = 100;
-    DeviceController::DoneCallback doneCallback = std::bind(&OnDeviceUpdate,
-        netConnection,
-        std::placeholders::_1,
-        std::placeholders::_2,
-        std::placeholders::_3,
-        std::placeholders::_4);
+    DeviceController::DoneCallback doneCallback = std::bind(
+        &OnDeviceUpdate, netConnection, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
     DeviceController deviceController(MAX_QUEUE_SIZE, doneCallback);
 
     /* Wait until the server should be closed */

@@ -44,16 +44,12 @@ enum ChangeType : std::uint8_t
     kNC = 0x00,  // Не изменяет REG[X]
     kINC = 0x01,  // Увеличение на 1 от заданного значения до 128
     kDEC = 0x02,  // Уменьшение на 1 от заданного значения до 0
-    kINC_OFF
-    = 0x03,  // Циклическое увеличение на 1 от заданного значения до 128, установка в 0, далее увеличение на 1 и т. д.
-    kDEC_ON
-    = 0x04,  // Циклическое уменьшение на 1 от заданного значения до 0, установка в 128, далее уменьшение на 1 и т. д.
+    kINC_OFF = 0x03,  // Циклическое увеличение на 1 от заданного значения до 128, установка в 0, далее увеличение на 1 и т. д.
+    kDEC_ON = 0x04,  // Циклическое уменьшение на 1 от заданного значения до 0, установка в 128, далее уменьшение на 1 и т. д.
     kINC_DEC = 0x05,  // Циклическое увеличение на 1 от заданного значения до 128, далее уменьшение на 1 до 0 и т. д.
     kDEC_INC = 0x06,  // Циклическое уменьшение на 1 от заданного значения до 0, далее увеличение на 1 до 128 и т. д.
-    kINC_M_DEC
-    = 0x07,  // Похоже на INC_DEC и DEC_INC, но изменение скважности нелинейное для лучшего восприятия глазом.
-    kDEC_M_INC
-    = 0x08,  // Похоже на INC_DEC и DEC_INC, но изменение скважности нелинейное для лучшего восприятия глазом.
+    kINC_M_DEC = 0x07,  // Похоже на INC_DEC и DEC_INC, но изменение скважности нелинейное для лучшего восприятия глазом.
+    kDEC_M_INC = 0x08,  // Похоже на INC_DEC и DEC_INC, но изменение скважности нелинейное для лучшего восприятия глазом.
     kRUN1 = 0x09,  // Устанавливается значение 128 если бит 0 счётчика программы PRG<0>=0, иначе 0
     kRUN2 = 0x0A,  // Устанавливается значение 0 если бит 0 счётчика программы PRG<0>=0, иначе 128
     kRUN3 = 0x0B,  // Устанавливается значение 128 если счётчик программы PRG<1:0>=X<1:0>, иначе 0
@@ -100,11 +96,7 @@ enum ChangeType : std::uint8_t
 class ControlMessage
 {
 public:
-    ControlMessage(std::uint8_t channelIdx,
-        std::uint8_t regValue,
-        ChangeType action,
-        std::uint16_t cmd,
-        std::uint16_t prg)
+    ControlMessage(std::uint8_t channelIdx, std::uint8_t regValue, ChangeType action, std::uint16_t cmd, std::uint16_t prg)
         : _commandData{
               DeviceCommand::kWriteToRegister,
               channelIdx,
@@ -160,8 +152,7 @@ DeviceController::~DeviceController()
     _workerThread.join();
 }
 
-void DeviceController::RunTransition(DeviceController::TransitionControllerCallback controllerCallback,
-    std::chrono::milliseconds duration)
+void DeviceController::RunTransition(DeviceController::TransitionControllerCallback controllerCallback, std::chrono::milliseconds duration)
 {
     if (controllerCallback == nullptr || duration.count() <= 0) {
         Tracer::Log("Invalid argument.\n");
@@ -180,9 +171,7 @@ void DeviceController::RunTransition(DeviceController::TransitionControllerCallb
     }
 }
 
-void DeviceController::AddCommand(DeviceController::CommandType type,
-    uint8_t param,
-    const std::vector<int8_t>& channels)
+void DeviceController::AddCommand(DeviceController::CommandType type, uint8_t param, const std::vector<int8_t>& channels)
 {
 
     for (const auto channel : channels) {
@@ -339,11 +328,10 @@ void DeviceController::WorkerThreadFunc()
         } else {
             if (_transitionControllerCallback != nullptr) {
 
-                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - _transitionStartTime);
+                auto elapsed
+                    = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _transitionStartTime);
 
-                std::vector<Channel> newState
-                    = _transitionControllerCallback(_transitionStartState, _transitionDuration, elapsed);
+                std::vector<Channel> newState = _transitionControllerCallback(_transitionStartState, _transitionDuration, elapsed);
                 for (size_t i = 0; i < newState.size(); ++i) {
                     if (newState[i].Param1 != _lastChannelValues[newState[i].Idx]) {
 

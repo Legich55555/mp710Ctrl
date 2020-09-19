@@ -53,8 +53,7 @@ int main(int argc, char** argv)
     signal(SIGTERM, SignalsHandler);
     signal(SIGINT, SignalsHandler);
 
-    constexpr char kDefaultAddress[]
-        = "8000";  // If only port is set then the server will listen on all IPv4 interfaces
+    constexpr char kDefaultAddress[] = "8000";  // If only port is set then the server will listen on all IPv4 interfaces
     const char* address = kDefaultAddress;
 
     for (int i = 0; i < argc; ++i) {
@@ -157,16 +156,13 @@ std::vector<std::uint8_t> ParseCommandMessage(const unsigned char* message, size
                 result.resize(0);
                 break;
             } else if (errno == ERANGE) {
-                Tracer::Log(
-                    "Failed to parse command '%s': to big value at position %i.\n", data.data(), curSign - data.data());
+                Tracer::Log("Failed to parse command '%s': to big value at position %i.\n", data.data(), curSign - data.data());
                 errno = 0;
 
                 result.resize(0);
                 break;
             } else if (errno == EINVAL) {
-                Tracer::Log("Failed to parse command '%s': invalid sign at position %i.\n",
-                    data.data(),
-                    stopSign - data.data());
+                Tracer::Log("Failed to parse command '%s': invalid sign at position %i.\n", data.data(), stopSign - data.data());
                 errno = 0;
 
                 result.resize(0);
@@ -184,13 +180,9 @@ std::vector<std::uint8_t> ParseCommandMessage(const unsigned char* message, size
     return result;
 }
 
-std::uint8_t LinearTransform(std::uint8_t startValue,
-    std::uint8_t endValue,
-    const std::int64_t elapsedMs,
-    const std::int64_t durationMs)
+std::uint8_t LinearTransform(std::uint8_t startValue, std::uint8_t endValue, const std::int64_t elapsedMs, const std::int64_t durationMs)
 {
-    return std::clamp(
-        int(startValue + ((endValue - startValue) * elapsedMs / durationMs)), 0, int(DeviceController::kBrightnessMax));
+    return std::clamp(int(startValue + ((endValue - startValue) * elapsedMs / durationMs)), 0, int(DeviceController::kBrightnessMax));
 }
 
 std::vector<DeviceController::Channel> SunriseController(const std::vector<std::uint8_t>& startState,
@@ -211,15 +203,15 @@ std::vector<DeviceController::Channel> SunriseController(const std::vector<std::
     if (elapsed <= phaseDuration) {
         const std::chrono::milliseconds phaseElapsed = elapsed;
 
-        redValue = LinearTransform(
-            startState[kRedChannelIdx], DeviceController::kBrightnessMax, phaseElapsed.count(), phaseDuration.count());
+        redValue
+            = LinearTransform(startState[kRedChannelIdx], DeviceController::kBrightnessMax, phaseElapsed.count(), phaseDuration.count());
     }
     // If it is phase #3
     else if (elapsed > 2 * phaseDuration) {
         const std::chrono::milliseconds phaseElapsed = elapsed - (2 * phaseDuration);
 
-        blueValue = LinearTransform(
-            startState[kBlueChannelIdx], DeviceController::kBrightnessMax, phaseElapsed.count(), phaseDuration.count());
+        blueValue
+            = LinearTransform(startState[kBlueChannelIdx], DeviceController::kBrightnessMax, phaseElapsed.count(), phaseDuration.count());
         greenValue = DeviceController::kBrightnessMax;
         redValue = DeviceController::kBrightnessMax;
     }
@@ -227,10 +219,8 @@ std::vector<DeviceController::Channel> SunriseController(const std::vector<std::
     else {
         const std::chrono::milliseconds phaseElapsed = elapsed - phaseDuration;
 
-        greenValue = LinearTransform(startState[kGreenChannelIdx],
-            DeviceController::kBrightnessMax,
-            phaseElapsed.count(),
-            phaseDuration.count());
+        greenValue
+            = LinearTransform(startState[kGreenChannelIdx], DeviceController::kBrightnessMax, phaseElapsed.count(), phaseDuration.count());
         redValue = DeviceController::kBrightnessMax;
     }
 
@@ -264,10 +254,7 @@ std::vector<DeviceController::Channel> SunsetController(const std::vector<std::u
         const std::chrono::milliseconds phaseElapsed = elapsed - (2 * phaseDuration);
 
         redValue = LinearTransform(startState[kRedChannelIdx], 0, phaseElapsed.count(), phaseDuration.count());
-        Tracer::Log("Red value %u %u %u.\n",
-            unsigned(redValue),
-            unsigned(phaseElapsed.count()),
-            unsigned(phaseDuration.count()));
+        Tracer::Log("Red value %u %u %u.\n", unsigned(redValue), unsigned(phaseElapsed.count()), unsigned(phaseDuration.count()));
         greenValue = 0;
         blueValue = 0;
     }
@@ -313,9 +300,8 @@ void EventHandler(mg_connection* nc, int event, void* eventData)
             std::uint8_t commandParam = commandParams[1];
 
             if (commandType == DeviceController::kSetBrightness) {
-                deviceController->AddCommand(commandType,
-                    commandParam,
-                    std::vector<std::int8_t>(commandParams.begin() + 2, commandParams.end()));
+                deviceController->AddCommand(
+                    commandType, commandParam, std::vector<std::int8_t>(commandParams.begin() + 2, commandParams.end()));
             } else if (commandType == DeviceController::kStartSunrise) {
                 deviceController->RunTransition(&SunriseController, std::chrono::seconds(15));
             } else if (commandType == DeviceController::kStartSunset) {
@@ -400,8 +386,8 @@ void OnDeviceUpdate(struct mg_connection* netConnection, bool result, const Devi
         static_cast<unsigned>(command.ChannelIdx),
         static_cast<unsigned>(command.Param1));
 
-    std::vector<char> buffer = SerializeToJson(
-        std::vector<DeviceController::Channel>{DeviceController::Channel{command.ChannelIdx, command.Param1}});
+    std::vector<char> buffer
+        = SerializeToJson(std::vector<DeviceController::Channel>{DeviceController::Channel{command.ChannelIdx, command.Param1}});
 
     Broadcast(netConnection, buffer.data(), buffer.size());
 }

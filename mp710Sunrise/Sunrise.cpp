@@ -95,8 +95,7 @@ void LinearEasing(DeviceController& controller,
 {
 
     auto stepTime = std::chrono::steady_clock::now();
-    for (unsigned char brightness = startBrightness; brightness <= stopBrightness && !IsSignalRaised();
-         ++brightness, stepTime += step) {
+    for (unsigned char brightness = startBrightness; brightness <= stopBrightness && !IsSignalRaised(); ++brightness, stepTime += step) {
 
         controller.AddCommand(DeviceController::kSetBrightness, brightness, channelIdx);
         std::this_thread::sleep_until(stepTime);
